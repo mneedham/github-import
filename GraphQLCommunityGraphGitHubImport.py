@@ -11,21 +11,15 @@ from neo4j.v1 import GraphDatabase, basic_auth
 
 def lambda_handler(event, context):
     print("Event:", event)
-    version_updated = "Default (Updating public graph)"
+    version_updated = "Default (Updating GraphQL graph)"
     NEO4J_PASSWORD = os.environ.get('NEO4J_PASSWORD', "test")
     NEO4J_URL = os.environ.get('NEO4J_URL', "bolt://localhost")
 
     if event and event.get("resources"):
-        if "CommunityGraphGitHubImport" in event["resources"][0]:
-            version_updated = "Updating public graph"
+        if "GraphQLCommunityGraphGitHubImport" in event["resources"][0]:
             ENCRYPTED_NEO4J_PASSWORD = os.environ['NEO4J_PASSWORD']
             NEO4J_PASSWORD = boto3.client('kms').decrypt(CiphertextBlob=b64decode(ENCRYPTED_NEO4J_PASSWORD))['Plaintext']
             NEO4J_URL = os.environ.get('NEO4J_PUBLIC_URL')
-        elif "CommunityGraphGitHubImportPrivate" in event["resources"][0]:
-            version_updated = "Updating private graph"
-            ENCRYPTED_NEO4J_PASSWORD = os.environ['NEO4J_PRIVATE_PASSWORD']
-            NEO4J_PASSWORD = boto3.client('kms').decrypt(CiphertextBlob=b64decode(ENCRYPTED_NEO4J_PASSWORD))['Plaintext']
-            NEO4J_URL = os.environ.get('NEO4J_PRIVATE_URL')
 
     neo4jUrl = NEO4J_URL
     neo4jPass = NEO4J_PASSWORD
@@ -54,11 +48,16 @@ def import_github(neo4jUrl, neo4jUser, neo4jPass):
     MERGE (owner)-[:CREATED]->(repo)
     """
 
+    page=1
+    items=100
+    tag="Neo4j"
+    hasMore=True
+
     from_date = (datetime.datetime.now() - datetime.timedelta(days=7)).strftime("%Y-%m-%d")
 
     print("Processing projects from {0}".format(from_date))
 
-    search="neo4j%20pushed:>{0}".format(from_date)
+    search="graphql%20pushed:>{0}".format(from_date)
     page=1
     items=100
     hasMore=True
