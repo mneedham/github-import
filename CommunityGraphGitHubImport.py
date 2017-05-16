@@ -1,9 +1,11 @@
 # pulling repositories from this API endpoint: https://api.github.com/search/repositories
 
 import os
-import time
+import datetime
 import requests
 import boto3
+import time
+
 from base64 import b64decode
 from neo4j.v1 import GraphDatabase, basic_auth
 
@@ -12,9 +14,6 @@ def lambda_handler(event, context):
     version_updated = "Default (Updating public graph)"
     NEO4J_PASSWORD = os.environ.get('NEO4J_PASSWORD', "test")
     NEO4J_URL = os.environ.get('NEO4J_URL', "bolt://localhost")
-
-    ENCRYPTED_GITHUB_TOKEN = os.environ['GITHUB_TOKEN']
-    GITHUB_TOKEN = boto3.client('kms').decrypt(CiphertextBlob=b64decode(ENCRYPTED_GITHUB_TOKEN))['Plaintext']
 
     if event and event.get("resources"):
         if "CommunityGraphGitHubImportPublic" in event["resources"][0]:
@@ -30,13 +29,12 @@ def lambda_handler(event, context):
 
     neo4jUrl = NEO4J_URL
     neo4jPass = NEO4J_PASSWORD
-    ghToken = GITHUB_TOKEN
     neo4jUser = os.environ.get('NEO4J_USER', "neo4j")
 
     print(version_updated)
-    import_github(neo4jUrl=neo4jUrl, neo4jUser=neo4jUser, neo4jPass=neo4jPass, ghToken=ghToken)
+    import_github(neo4jUrl=neo4jUrl, neo4jUser=neo4jUser, neo4jPass=neo4jPass)
 
-def import_github(neo4jUrl, neo4jUser, neo4jPass, ghToken):
+def import_github(neo4jUrl, neo4jUser, neo4jPass):
     driver = GraphDatabase.driver(neo4jUrl, auth=basic_auth(neo4jUser, neo4jPass))
 
     session = driver.session()
@@ -46,9 +44,9 @@ def import_github(neo4jUrl, neo4jUser, neo4jPass, ghToken):
     WITH {json} as data
     UNWIND data.items as r
     MERGE (repo:Repository:GitHub {id:r.id})
-      ON CREATE SET repo.title = r.name, repo.full_name=r.full_name, repo.url = r.html_url, repo.created = r.created_at,
+      ON CREATE SET repo.title = r.name, repo.full_name=r.full_name, repo.url = r.html_url, repo.created = apoc.date.parse(r.created_at,'ms',"yyyy-MM-dd'T'HH:mm:ss'Z'"), repo.created_at = r.created_at,
       repo.homepage = r.homepage
-    SET repo.favorites = r.stargazers_count, repo.updated = r.updated_at, repo.pushed = r.pushed_at,repo.size = r.size,
+    SET repo.favorites = r.stargazers_count, repo.updated = apoc.date.parse(r.updated_at,'ms',"yyyy-MM-dd'T'HH:mm:ss'Z'"), repo.updated_at = r.updated_at, repo.pushed = r.pushed_at,repo.size = r.size,
      repo.score = r.score, repo.watchers = r.watchers, repo.language = r.language, repo.forks = r.forks_count,
     repo.open_issues = r.open_issues, repo.branch = r.default_branch, repo.description = r.description
 
@@ -61,7 +59,11 @@ def import_github(neo4jUrl, neo4jUser, neo4jPass, ghToken):
     tag="Neo4j"
     hasMore=True
 
-    search="neo4j" #%20created:>2016-01-01"
+    from_date = (datetime.datetime.now() - datetime.timedelta(days=7)).strftime("%Y-%m-%d")
+
+    print("Processing projects from {0}".format(from_date))
+
+    search="neo4j%20pushed:>{0}".format(from_date)
     page=1
     items=100
     hasMore=True
@@ -99,8 +101,7 @@ def import_github(neo4jUrl, neo4jUser, neo4jPass, ghToken):
 
 if __name__ == "__main__":
     neo4jPass = os.environ.get('NEO4J_PASSWORD', "test")
-    ghToken = os.environ.get('GITHUB_TOKEN', "")
     neo4jUrl = os.environ.get('NEO4J_URL', "bolt://localhost")
     neo4jUser = os.environ.get('NEO4J_PASSWORD', "test")
 
-    import_github(neo4jUrl=neo4jUrl, neo4jUser=neo4jUser, neo4jPass=neo4jPass, ghToken=ghToken)
+    import_github(neo4jUrl=neo4jUrl, neo4jUser=neo4jUser, neo4jPass=neo4jPass)
