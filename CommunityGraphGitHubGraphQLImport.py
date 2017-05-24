@@ -73,11 +73,11 @@ def import_github(neo4jUrl, neo4jUser, neo4jPass):
           repo.watchers = r.watchers, repo.language = r.language, repo.forks = r.forks_count,
           repo.open_issues = r.open_issues, repo.branch = r.default_branch, repo.description = r.description
     MERGE (owner:User:GitHub {id:r.owner.id}) 
-      SET owner.name = r.owner.login, owner.type=r.owner.type, owner.full_name = r.owner.name
+      SET owner.name = r.owner.login, owner.type=r.owner.type, owner.full_name = r.owner.name, owner.location = r.owner.location
     MERGE (owner)-[:CREATED]->(repo)
     """
 
-    from_date = (datetime.datetime.now() - datetime.timedelta(days=30)).strftime("%Y-%m-%d")
+    from_date = (datetime.datetime.now() - datetime.timedelta(days=90)).strftime("%Y-%m-%d")
 
     print("Processing projects from {0}".format(from_date))
 
@@ -129,6 +129,7 @@ def import_github(neo4jUrl, neo4jUser, neo4jPass):
                          ... on User {
                            name
                            databaseId
+                           location
                          }
                          ... on Organization {
                             name
@@ -144,10 +145,11 @@ def import_github(neo4jUrl, neo4jUser, neo4jPass):
             "variables": {"searchTerm": search, "cursor": cursor}
         }
 
+        github_token = "bearer {token}".format(token = os.environ["GITHUB_TOKEN"])
         response = requests.post(apiUrl,
                                  data = json.dumps(data),
                                  headers = {"accept":"application/json",
-                                            "Authorization": "bearer 5091787e0bc786368c503d31f10aae2b589be309"})
+                                            "Authorization": github_token})
         r = response.json()
 
         the_json = []
@@ -172,7 +174,8 @@ def import_github(neo4jUrl, neo4jUser, neo4jPass):
                     "id": node["owner"].get("databaseId", ""),
                     "login": node["owner"]["login"],
                     "name": node["owner"].get("name", ""),
-                    "type": node["owner"]["__typename"]
+                    "type": node["owner"]["__typename"],
+                    "location": node["owner"].get("location", "")
                 },
                 "default_branch": default_branch_ref.get("name", ""),
                 "open_issues": node["issues"]["totalCount"],
