@@ -1,4 +1,3 @@
-# pulling repositories from this API endpoint: https://api.github.com/search/repositories
 import json
 import os
 import datetime
@@ -54,6 +53,7 @@ def lambda_handler(event, context):
     print(version_updated)
     import_github(neo4jUrl=neo4jUrl, neo4jUser=neo4jUser, neo4jPass=neo4jPass)
 
+
 def import_github(neo4jUrl, neo4jUser, neo4jPass):
     driver = GraphDatabase.driver(neo4jUrl, auth=basic_auth(neo4jUser, neo4jPass))
 
@@ -64,25 +64,20 @@ def import_github(neo4jUrl, neo4jUser, neo4jPass):
     WITH {json} as data
     UNWIND data.items as r
     MERGE (repo:Repository:GitHub {id:r.id})
-      ON CREATE SET repo.title = r.name, repo.full_name=r.full_name, repo.url = r.html_url, repo.created = apoc.date.parse(r.created_at,'ms',"yyyy-MM-dd'T'HH:mm:ss'Z'"), repo.created_at = r.created_at,
-      repo.homepage = r.homepage
-    SET repo.favorites = r.stargazers_count, repo.updated = apoc.date.parse(r.updated_at,'ms',"yyyy-MM-dd'T'HH:mm:ss'Z'"), repo.updated_at = r.updated_at, repo.pushed = r.pushed_at,repo.size = r.size,
-     repo.watchers = r.watchers, repo.language = r.language, repo.forks = r.forks_count,
-    repo.open_issues = r.open_issues, repo.branch = r.default_branch, repo.description = r.description
-    MERGE (owner:User:GitHub {id:r.owner.id}) SET owner.name = r.owner.login, owner.type=r.owner.type, owner.full_name = r.owner.name
+      ON CREATE SET 
+        repo.title = r.name, repo.full_name=r.full_name, repo.url = r.html_url, 
+        repo.created = apoc.date.parse(r.created_at,'ms',"yyyy-MM-dd'T'HH:mm:ss'Z'"), repo.created_at = r.created_at,
+        repo.homepage = r.homepage
+      SET repo.favorites = r.stargazers_count, repo.updated = apoc.date.parse(r.updated_at,'ms',"yyyy-MM-dd'T'HH:mm:ss'Z'"), 
+          repo.updated_at = r.updated_at, repo.pushed = r.pushed_at,repo.size = r.size,
+          repo.watchers = r.watchers, repo.language = r.language, repo.forks = r.forks_count,
+          repo.open_issues = r.open_issues, repo.branch = r.default_branch, repo.description = r.description
+    MERGE (owner:User:GitHub {id:r.owner.id}) 
+      SET owner.name = r.owner.login, owner.type=r.owner.type, owner.full_name = r.owner.name
     MERGE (owner)-[:CREATED]->(repo)
     """
 
-    # importQuery = """
-    #     WITH {json} as data
-    #     UNWIND data.items as r
-    #     RETURN r.name, r.full_name, r.html_url, apoc.date.parse(r.created_at,'ms',"yyyy-MM-dd'T'HH:mm:ss'Z'"), r.created_at, r.homepage,
-    #     r.stargazers_count, apoc.date.parse(r.updated_at,'ms',"yyyy-MM-dd'T'HH:mm:ss'Z'"), r.updated_at, r.pushed_at,  r.size, r.score,
-    #     r.watchers, r.language, r.forks_count, r.open_issues, r.default_branch, r.description, r.owner.id, r.owner.login, r.owner.type, r.owner.name
-    #     LIMIT 10
-    #     """
-
-    from_date = (datetime.datetime.now() - datetime.timedelta(days=7)).strftime("%Y-%m-%d")
+    from_date = (datetime.datetime.now() - datetime.timedelta(days=30)).strftime("%Y-%m-%d")
 
     print("Processing projects from {0}".format(from_date))
 
@@ -120,23 +115,13 @@ def import_github(neo4jUrl, neo4jUser, neo4jPass):
                        diskUsage
                        description
                        homepageUrl
-                       issues {
-                         totalCount
-                       }
-                       stargazers {
-                         totalCount
-                       }
-                       watchers {
-                         totalCount
-                       }
-                       forks { 
-                           totalCount
-                       }
+                       issues { totalCount }
+                       stargazers { totalCount }
+                       watchers { totalCount }
+                       forks { totalCount }
                        
                        languages(first:1, orderBy: {field: SIZE, direction:DESC}) {
-                         nodes {
-                           name
-                         }
+                         nodes { name }
                        }
                        owner {          
                          __typename
@@ -150,9 +135,7 @@ def import_github(neo4jUrl, neo4jUser, neo4jPass):
                             databaseId
                          }
                        }    
-                        defaultBranchRef {
-                          name
-                        }
+                        defaultBranchRef { name }
                      }      
                    }
                  }
@@ -161,7 +144,10 @@ def import_github(neo4jUrl, neo4jUser, neo4jPass):
             "variables": {"searchTerm": search, "cursor": cursor}
         }
 
-        response = requests.post(apiUrl, data = json.dumps(data), headers = {"accept":"application/json", "Authorization": "bearer 5091787e0bc786368c503d31f10aae2b589be309"})
+        response = requests.post(apiUrl,
+                                 data = json.dumps(data),
+                                 headers = {"accept":"application/json",
+                                            "Authorization": "bearer 5091787e0bc786368c503d31f10aae2b589be309"})
         r = response.json()
 
         the_json = []
@@ -209,10 +195,12 @@ def import_github(neo4jUrl, neo4jUser, neo4jPass):
         if r["data"]["rateLimit"]["remaining"] <= 0:
             time.sleep(time_until_reset)
 
-        print("Reset at:", time_until_reset, "has_more", has_more, "cursor", cursor, "repositoryCount", search_section["repositoryCount"])
+        print("Reset at:", time_until_reset,
+              "has_more", has_more,
+              "cursor", cursor,
+              "repositoryCount", search_section["repositoryCount"])
 
     session.close()
-
 
 if __name__ == "__main__":
     neo4jPass = os.environ.get('NEO4J_PASSWORD', "neo")
