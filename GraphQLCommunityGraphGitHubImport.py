@@ -19,7 +19,7 @@ def lambda_handler(event, context):
         if "GraphQLCommunityGraphGitHubImport" in event["resources"][0]:
             ENCRYPTED_NEO4J_PASSWORD = os.environ['NEO4J_PASSWORD']
             NEO4J_PASSWORD = boto3.client('kms').decrypt(CiphertextBlob=b64decode(ENCRYPTED_NEO4J_PASSWORD))['Plaintext']
-            NEO4J_URL = os.environ.get('NEO4J_PUBLIC_URL')
+            NEO4J_URL = os.environ.get('NEO4J_URL')
 
     neo4jUrl = NEO4J_URL
     neo4jPass = NEO4J_PASSWORD
